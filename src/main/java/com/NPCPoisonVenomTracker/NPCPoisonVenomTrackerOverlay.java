@@ -1,77 +1,81 @@
 package com.NPCPoisonVenomTracker;
 
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Graphics2D;
-import java.util.HashSet;
-import java.util.Set;
+import java.awt.*;
+import java.time.Instant;
 
-import javax.inject.Inject;
-
-import net.runelite.api.Actor;
-import net.runelite.api.NPC;
+import net.runelite.api.*;
 import net.runelite.api.Point;
 import net.runelite.api.coords.LocalPoint;
-import net.runelite.api.events.NpcDespawned;
-import net.runelite.api.events.HitsplatApplied;
-import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayPosition;
+import net.runelite.client.ui.overlay.OverlayUtil;
 
-import static net.runelite.api.HitsplatID.POISON;
-import static net.runelite.api.HitsplatID.VENOM;
+import javax.inject.Inject;
 
 public class NPCPoisonVenomTrackerOverlay extends Overlay
 {
-    private final Set<NPC> poisonedNpcs = new HashSet<>();
-
     @Inject
+    private NPCPoisonVenomTrackerPlugin plugin;
+    @Inject
+    private Client client;
+    @Inject
+    private NPCPoisonVenomTrackerConfig config;
+
     public NPCPoisonVenomTrackerOverlay()
     {
         setPosition(OverlayPosition.DYNAMIC);
         setLayer(OverlayLayer.ABOVE_SCENE);
     }
 
-    @Subscribe
-    public void onNpcHit(HitsplatApplied event)
-    {
-        Actor actor = event.getActor();
-        if (!(actor instanceof NPC))
-        {
-            return;
-        }
-
-        NPC npc = (NPC) actor;
-        if (event.getHitsplat().getHitsplatType() == POISON || event.getHitsplat().getHitsplatType() == VENOM)
-        {
-            poisonedNpcs.add(npc);
-        }
-    }
-
-    @Subscribe
-    public void onNpcDespawned(NpcDespawned event)
-    {
-        poisonedNpcs.remove(event.getNpc());
-    }
-
     @Override
     public Dimension render(Graphics2D graphics)
     {
-        for (NPC npc : poisonedNpcs)
-        {
-            Point npcScreenLocation = npc.getCanvasTextLocation(graphics, npc.getName(), 0);
+        final int textHeight = 25;
+        final float borderWidth = 2.0f;
+        final Color hullColorPoison = config.poisonHighlightColor();
+        final Color hullColorVenom = config.venomHighlightColor();
+        final Color textColor = config.textColor();
 
-            if (npcScreenLocation != null)
+        for (InflictedNPC iNpc : plugin.getInflictedNPCs().values()) // For each inflicted NPC
+        {
+            NPC npc = iNpc.getNPC();
+            if (npc.isDead())
             {
-                graphics.setColor(Color.GREEN);
-                LocalPoint canvasLocation = npc.getLocalLocation();
-                int width = npc.getConvexHull().getBounds().width;
-                int height = npc.getConvexHull().getBounds().height;
-                graphics.drawRect(canvasLocation.getX(), canvasLocation.getY(), width, height);
+                continue;
             }
+
+            float secSinceLastTick = (Instant.now().toEpochMilli() - plugin.getLastGameTick()) / 1000.0f;
+            int nextDamage = iNpc.getNextDamage();
+            int ticksUntilHit = iNpc.getTicksUntilNextHit();
+            int ticksRemaining = iNpc.getTicksRemaining();
+            int height = npc.getLogicalHeight() + textHeight;
+            int secondsUntilHit = (int)Math.ceil(ticksUntilHit * 0.6f - secSinceLastTick);
+            int secondsRemaining = (int)Math.ceil(ticksRemaining * 0.6f - secSinceLastTick);
+
+            LocalPoint localLocation = npc.getLocalLocation();
+            Point npcPoint = Perspective.localToCanvas(client, localLocation, client.getPlane(), height);
+
+            String ticksUntilHitS = ticksUntilHit <= 0 ? "?" : config.showTicksAsTime()
+                    ? String.format("%02d:%02d", (secondsUntilHit / 60) % 60, secondsUntilHit % 60)
+                    : Integer.toString(ticksUntilHit);
+            String ticksRemainingS = ticksRemaining == -1 ? "N/A" : config.showTicksAsTime()
+                    ? String.format("%02d:%02d", (secondsRemaining / 60) % 60, secondsRemaining % 60)
+                    : Integer.toString(ticksRemaining);
+
+            String text = String.format("%s | %s | %s", nextDamage, ticksUntilHitS, ticksRemainingS);
+            // Next_Damage | Ticks_Until_Hit | Ticks_Remaining
+
+            // Draw hull around NPC
+            graphics.setColor(iNpc.getHitsplatType() == HitsplatID.POISON ? hullColorPoison : hullColorVenom);
+            graphics.setStroke(new BasicStroke(borderWidth));
+            graphics.draw(npc.getConvexHull());
+
+            // Draw text above NPC
+            OverlayUtil.renderTextLocation(graphics, npcPoint, text, textColor);
         }
 
         return null;
     }
+
 }
