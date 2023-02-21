@@ -11,20 +11,46 @@ public interface NPCPoisonVenomTrackerConfig extends Config
 {
 	@ConfigItem(
 			position = 0,
-			keyName = "highlightColor",
-			name = "Highlight Color",
-			description = "The color to use for highlighting NPCs inflicted with Poison/Venom"
+			keyName = "poisonHighlightColor",
+			name = "Poison Highlight Color",
+			description = "The color to use for highlighting NPCs inflicted with Poison"
 	)
-	default String highlightColor()
+	default Color poisonHighlightColor()
 	{
-		return "#C8FF00";
+		return new Color(200, 255, 0); //aka #C8FF00
 	}
 
-	void setHighlightColor(String color);
-
-	default Color getHighlightColor()
+	@ConfigItem(
+			position = 1,
+			keyName = "venomHighlightColor",
+			name = "Venom Highlight Color",
+			description = "The color to use for highlighting NPCs inflicted with Venom"
+	)
+	default Color venomHighlightColor()
 	{
-		return Color.decode(highlightColor());
+		return new Color(0, 255, 111);
+	}
+
+	@ConfigItem(
+			position = 2,
+			keyName = "textColor",
+			name = "Text Color",
+			description = "The color to use for text above inflicted NPCs"
+	)
+	default Color textColor()
+	{
+		return new Color(255, 255, 255);
+	}
+
+	@ConfigItem(
+			position = 3,
+			keyName = "showTicksAsTime",
+			name = "Show as time remaining",
+			description = "Replaces ticks with time remaining"
+	)
+	default boolean showTicksAsTime()
+	{
+		return true;
 	}
 }
 
